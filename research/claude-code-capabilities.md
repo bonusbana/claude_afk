@@ -1,100 +1,173 @@
 # Claude Code Native Capabilities (relevant to unattended operation)
 
-Status: partial — empirical findings from tonight's setup, official-docs
-pass still needed for sessions/resume, hooks, Agent SDK, compaction details,
-usage-limit behaviour specifics.
+Status: done for this research pass — combines tonight's empirical findings
+with an official-docs pass (code.claude.com, current as of 2026-09-11).
+Two promising leads flagged as unexplored in Open below (`/goal`, Desktop
+scheduled tasks) — worth a look before finalizing any V1 design.
 
-## Scheduling mechanisms — two very different things exist
+## Scheduling — three official options, not two
 
-### `CronCreate` / `CronList` / `CronDelete` (in-session cron)
+Official docs (`/docs/en/scheduled-tasks`) give an explicit comparison
+table that matches and sharpens what we found hands-on tonight:
 
-- Fires a prompt on a cron schedule, but **only while this session's REPL is
-  idle**, and the job store is **in-memory, session-only** — "gone when
-  Claude exits." `durable: true` has **no effect** per the tool's own
-  description.
-- Recurring jobs auto-expire after 7 days regardless.
-- **Verdict: not suitable for overnight independence.** It cannot survive
-  this interactive session ending, crashing, or the machine sleeping. It's a
-  same-session reminder/retry mechanism, not a continuation mechanism.
+| | Cloud (Routines) | Desktop scheduled tasks | `/loop` (CronCreate/List/Delete) |
+|---|---|---|---|
+| Runs on | Cloud, Anthropic-managed | Your machine | Your machine |
+| Requires machine on | No | Yes | Yes |
+| Requires open session | No | No | Yes |
+| Persistent across restarts | Yes | Yes | Restored on `--resume`, with exceptions |
+| Local file access | No (fresh clone) | Yes | Yes |
+| Permission prompts | No (runs autonomously) | Configurable per task | Inherits from session |
+| Minimum interval | 1 hour | 1 minute | 1 minute |
 
-### `RemoteTrigger` (cloud "routines") — the actual durable mechanism
+Tonight's own experience maps directly onto this table:
 
-- Each routine spawns a **fully isolated cloud session** in Anthropic's
-  infrastructure (not on the user's machine), on a cron schedule or a single
-  `run_once_at` (RFC3339 UTC) firing.
-- Session config (`job_config.ccr`) specifies: model, `sources` (git repos to
-  check out), `allowed_tools`, and the initiating prompt.
-- **This is genuinely independent of the local machine**: survives PC sleep,
-  WSL stopping, reboots, or full shutdown, because it never touches the
-  local machine at all.
-- **Minimum interval for recurring is 1 hour**; one-shot via `run_once_at`
-  has no such floor.
-- **Cannot delete routines via API** — only through the web UI
-  (claude.ai/code/routines).
-- **Key limitation discovered tonight: GitHub-native, not host-agnostic.**
-  The `sources: [{git_repository: {url}}]` mechanism, the setup warnings
-  ("Couldn't verify GitHub access... install the Claude GitHub App"), and
-  every piece of the tooling's own guidance reference GitHub specifically
-  (accepting "GitHub URLs in any format"). No GitLab (or other host)
-  integration is mentioned anywhere. Repo access for a routine appears to
-  depend on the **Claude GitHub App** being authorized for that repo — a
-  *separate* auth path from a user's local SSH key or PAT. This is why this
-  project's repo was moved from GitLab to GitHub mid-setup: it's not that
-  GitLab couldn't work at all (a routine could presumably still `git clone`
-  an arbitrary public/token-authenticated URL via Bash rather than the
-  structured `sources` field), but the *documented, first-class* path is
-  GitHub-only, and improvising around that would have meant embedding a
-  long-lived PAT in a routine's cloud-stored prompt instead of using the
-  proper App-scoped grant.
-- Routines cannot access local files, local services, or local environment
-  variables — everything they need must come from the git source(s) and the
-  prompt.
+- **`CronCreate`/`CronList`/`CronDelete`** = the `/loop` mechanism's
+  underlying tools. Confirmed session-only/in-memory tonight; the docs
+  make the exact limitation explicit: "Tasks only fire while Claude Code is
+  running and idle... Starting a fresh conversation clears all
+  session-scoped tasks." They *do* survive `--resume`/`--continue` (tasks
+  that haven't expired restore), which is a nuance we hadn't tested tonight
+  — but a session that's fully **killed** (not just closed) and never
+  resumed loses them, and a self-paced `/loop`'s pending wakeup specifically
+  is never restored on resume either way. Recurring tasks auto-expire after
+  7 days; up to 50 tasks per session; jitter is applied automatically to
+  avoid thundering-herd fire times.
+- **`RemoteTrigger`** = the API surface behind **Routines**
+  (`/docs/en/routines`, user-facing name; `/schedule` in the CLI). Confirmed
+  tonight: independent of the local machine entirely, GitHub-repo sources,
+  no local file access, runs autonomously with no permission prompts,
+  1-hour floor on recurring (none on one-shot). This is what we used for
+  the overnight continuation.
+- **Desktop scheduled tasks** — genuinely new information, not used
+  tonight: runs locally like `/loop`, but *doesn't* require an open session
+  and *is* persistent across restarts, while still keeping local file
+  access. This looks like it could be a real alternative to `RemoteTrigger`
+  for a future task that specifically needs local file/tool access (this
+  user's WSL/AutoHotkey/Rainmeter work, for instance) without needing the
+  whole session to stay alive. Not yet investigated in detail — see Open.
 
-**Implication for Claude AFK:** the "wait for a fresh independent session to
-pick up work later" building block one might assume needs custom
-infrastructure (a daemon, a Windows Task Scheduler entry, a separate VM) is
-already provided natively via `RemoteTrigger`, *provided* the work targets
-a GitHub repo and the state needed to resume fits in "clone repo + read a
-state file + prompt." That covers a lot of the "recover later / continue
-from durable state" part of the target workflow for free.
+**Implication:** the three-way split maps cleanly onto need — `/loop` for
+in-session polling, Desktop tasks for durable-but-local, Routines for
+durable-and-machine-independent. Tonight's choice of Routines was correct
+for a GitHub-backed research task with no local-file dependency, but a
+future AFK task that needs the user's actual WSL environment might want
+Desktop scheduled tasks instead of (or alongside) a cloud Routine.
 
-## Permission model layers observed tonight
+## Permission model — now with the official name
 
-Two independent layers, not one:
+Tonight's empirical finding (a classifier layer that blocks certain
+actions even under `defaultMode: auto`, distinct from the allow/deny list)
+turns out to be exactly the officially documented **`auto` permission
+mode**: "a classifier review[s] most actions instead of you." This is a
+named, documented mechanism, not an ad hoc guess — `--permission-mode auto`
+is the flag, and it's explicitly one of the built-in permission modes
+alongside `acceptEdits`, `dontAsk`, `plan`, and `bypassPermissions`
+(formerly `--dangerously-skip-permissions`).
 
-1. **`.claude/settings.json` allow/deny lists** (`permissions.allow`,
-   `permissions.defaultMode`). This project's global settings already had
-   `defaultMode: "auto"`. Project-level settings can add narrowly-scoped
-   `Bash(...)` allow patterns on top.
-2. **An auto-mode classifier that sits in front of the allow-list and can
-   still block an action even under `defaultMode: auto` and even when the
-   action would otherwise match nothing that requires approval.** Observed
-   blocking two things tonight, both credential/permission-adjacent:
-   - Running `ssh-keygen` to generate a new key (credential generation).
-   - Editing `.claude/settings.json` itself to add new allow-rules
-     (self-expanding its own permissions).
+For unattended runs specifically, the docs name the exact combination
+`overnight-protocol` improvised without naming it: **`--permission-prompts
+none`** — "denies anything that would prompt, tells Claude not to retry,
+and the run continues," explicitly recommended for "a scheduled job" with
+"nobody available to answer permission prompts." Paired with
+`--permission-mode auto`, this is the closest official equivalent to what
+`overnight-protocol` builds by hand with `--dangerously-skip-permissions` +
+a small deny list — worth comparing directly in a future pass (see Open).
 
-   Both were resolved by asking the user directly (outside the normal
-   allow-list path) — the classifier's denial message explicitly says to
-   surface it to the user rather than try to work around it.
+This also resolves an open question from tonight: the classifier's exact
+boundary isn't fully mapped, but it is now confirmed to be a named,
+documented feature (`auto` mode) rather than an undocumented safety net,
+which means its behavior should be spec'd in the permission-modes docs
+page — not yet read in full (see Open).
 
-**Implication:** a narrowly-scoped allow-list reduces *routine* prompts (git
-subcommands, reading/writing project files, running python) but does **not**
-give an agent the ability to grant itself more power or mint new credentials
-unattended — that boundary held even under `defaultMode: auto`, and appears
-to require the user's direct, one-time say-so regardless of any
-configuration. This is a meaningful safety property to note when comparing
-against `overnight-protocol`'s `--dangerously-skip-permissions` approach:
-Claude Code's own classifier layer is *not* the same thing as an
-allow/deny list, and isn't simply bypassed by broadening one.
+## Session resume — what actually carries over (official, precise)
 
-## Still to investigate (official docs pass)
+Per `/docs/en/sessions`:
 
-- Session resume (`--resume`/`--continue`) mechanics and what state actually
-  carries across.
-- Headless/non-interactive mode specifics (`-p`, output formats).
-- Hooks (what events exist, what they can block/inject).
-- Context compaction behaviour and any user-visible warning before it fires.
-- How usage-limit exhaustion actually surfaces to a running session
-  (hard stop vs. gracefully-returned error vs. queued retry).
-- Agent SDK capabilities beyond what Claude Code CLI exposes directly.
+- **Restored:** full conversation history (a tool still running at crash
+  time doesn't finish or rerun — Claude continues without its output);
+  model; agent (with its tool restrictions); permission mode (via a
+  detailed table of exceptions depending on how you resume); an **active
+  goal** if one was running (turn count/timer/token-spend baseline reset —
+  see the `/goal` flag below); scheduled tasks that haven't expired.
+- **Not restored:** background Bash and monitor tasks; a self-paced
+  `/loop`'s pending wakeup; several launch flags (`--mcp-config`,
+  `--settings`, `--plugin-dir`, `--fallback-model`, `--add-dir`) — must be
+  passed again on resume, though `settings.json`/`settings.local.json`
+  themselves are re-read at launch so config living there doesn't need
+  repeating.
+- **"Resume from a summary" dialog:** on Pro/Max, resuming a session
+  inactive >~1hr and over 100k tokens offers 3 choices — resume from an
+  immediate `/compact` summary (cheaper per later request, loses whatever
+  the summary drops), resume as-is (keeps everything, costs more per
+  request), or "don't ask again." This is a concrete, user-controllable
+  cost/completeness tradeoff directly relevant to
+  `analysis/economics.md` for any design that pauses and resumes a local
+  session repeatedly.
+- Cross-project session lookup by ID has worked since v2.1.223 (used to
+  require resuming from the original directory).
+
+## Context compaction
+
+`/compact` replaces history with a summary plus the most recent exchanges
+and up to 5 recently-read files — this is also exactly what "resume from
+summary" runs automatically. No user-visible pre-compaction warning
+mechanism was found in what was read; `overnight-protocol`'s own finding
+that `PreCompact`'s `additionalContext` is ignored appears to still be
+accurate as a hook-input limitation (separate from `/compact` itself,
+which is a normal user/session-triggered action, not a hook). One
+third-party (non-official) source claims `PreCompact` hook *blocking*
+behavior changed recently — flagged as unverified in Open, needs an
+official hooks-reference check, not taken as fact here.
+
+## Headless (`claude -p`) mode — official mechanics
+
+- `-p`/`--print` runs non-interactively; `--bare` skips
+  hooks/skills/commands/plugins/MCP/auto-memory/CLAUDE.md discovery for
+  faster, more deterministic CI-style runs (recommended for scripted
+  calls, becoming the `-p` default in future).
+- `--output-format json`/`stream-json` gives structured output including
+  `total_cost_usd` per invocation (client-side estimate) — directly useful
+  for tracking spend per scheduled run without a separate usage daemon.
+- Retryable API failures emit a `system/api_retry` event with an explicit
+  error-category field (`rate_limit`, `overloaded`, `server_error`, etc.) —
+  this is the closest thing found to an official, structured usage/rate-
+  limit signal surfaced to a running session, though it's a retry-in-
+  progress signal, not a proactive "you're approaching your cap" one.
+- SIGTERM leaves the in-progress turn unfinished and resumable; SIGINT (or
+  the SDK's `interrupt()`) ends the turn cleanly first. Background Bash
+  tasks are killed ~5s after a `-p` run's final result; background
+  subagents/workflows keep the process alive until done (capped at 10 min
+  idle by default).
+
+## Still open / not yet investigated
+
+- **`/goal`** (`/docs/en/goal`) — mentioned in passing by the sessions doc
+  ("keep the session working turn after turn toward a condition") and
+  confirmed to survive resume (turn count/timer/token-baseline reset on
+  resume). This could be a **directly relevant native feature for Claude
+  AFK** — a built-in bounded, condition-driven work loop — and hasn't been
+  read at all yet. **High priority for the next research pass** before
+  finalizing `planning/draft-claude-afk-plan.md`; it may change the "smallest
+  sensible V1" recommendation.
+- **Desktop scheduled tasks** (`/docs/en/desktop-scheduled-tasks`) — the
+  local-persistent-with-file-access option flagged above; not read in
+  detail. Relevant specifically for any future AFK task needing this
+  user's actual WSL/Windows environment rather than a fresh cloud clone.
+- **`/docs/en/permission-modes`** in full — to map the `auto`-mode
+  classifier's exact boundary (only two trigger cases observed empirically:
+  credential generation, settings.json self-edit) against the documented
+  behavior, and to properly compare `--permission-mode auto` +
+  `--permission-prompts none` against `overnight-protocol`'s
+  `--dangerously-skip-permissions` + deny-list approach.
+- **`/docs/en/hooks`** in full — to verify or refute the third-party claim
+  that `PreCompact` blocking behavior recently changed (currently
+  unverified, see Compaction section).
+- **`/docs/en/goal`, `/docs/en/channels`, `/docs/en/checkpointing`,
+  `/docs/en/worktrees`** — mentioned by the docs read so far as related
+  mechanisms, not yet explored for AFK relevance.
+- Agent SDK vs. Managed Agents vs. Claude Code CLI: a comparison table was
+  found (`/docs/en/agent-sdk/overview`) — Managed Agents is described as
+  "long-running or asynchronous agents without managing your own sandbox,"
+  a **separate hosted product** from both the Agent SDK and `RemoteTrigger`
+  Routines, not yet compared against Routines for this use case.
