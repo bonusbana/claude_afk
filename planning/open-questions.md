@@ -24,33 +24,34 @@
   empirically and by official docs and by `autonomous-loop`'s own
   independent guidance — session-scoped, restored on `--resume` (with
   exceptions) but lost if the session is killed outright.
-- ~~What triggers the auto-mode classifier?~~ Named: this is the
-  documented `auto` permission mode. Exact boundary still only
-  empirically known for 2 cases (credential generation, settings.json
-  self-edit) — full mapping would require reading `/docs/en/permission-modes`
-  in full (not yet done).
+- ~~What triggers the auto-mode classifier, and what's the full permission
+  model?~~ Fully resolved by reading `/docs/en/permission-modes` in full —
+  see `analysis/permission-model.md`. Settings.json block = protected-path
+  write routed to the classifier (not a special rule); ssh-keygen block =
+  ordinary classifier judgment call. Headless (`-p`) runs cannot stall on
+  a permission block at all (no prompt to wait on) — a major finding for
+  AFK's execution-mode choice.
+- ~~RemoteTrigger empirical validation (fire/clone/access/read/write/
+  commit/push)~~ Done, 2026-09-10T23:48 UTC: ran the actual trigger via
+  `RemoteTrigger action=run` with a verification-only prompt. Result: 6/6
+  PASS in 25s/10 turns, no permission stalls. See
+  `validation/remote-trigger-test.md` and commit `9c57b75`.
 
 ## Still open
 
-- Full boundary of the `auto`-mode classifier beyond the two observed
-  trigger cases — worth reading `/docs/en/permission-modes` in full if a
-  future session needs to know in advance whether some other action
-  category will stall an unattended run.
 - Whether `PreCompact` hook blocking behavior has actually changed
   recently (a non-official source claimed so; `overnight-protocol`'s own
   finding — that `additionalContext` is ignored — was taken as accurate
   here, but the blocking-vs-not question specifically is unverified
-  against an official source).
-- Real end-to-end validation of tonight's scheduled continuation is still
-  pending — routine creation succeeded (proves repo access at
-  creation-time preflight) but the first real fire (2026-09-11T03:50:00Z)
-  hadn't happened as of this writing. First thing to check on resume via
-  `RemoteTrigger get_run_log` on trigger id `trig_01WDqrGYk4JgLwkNL86HR72u`.
+  against an official source). Low priority — doesn't block the V1 spec.
 - Managed Agents vs. Routines — not yet compared for this use case beyond
-  noting both exist.
-- Whether an adapted, official `--permission-mode auto` +
-  `--permission-prompts none` combination could replace
-  `overnight-protocol`'s hand-rolled `--dangerously-skip-permissions` +
-  deny-list approach entirely, if a future design ever needs the
-  "stay-alive-and-sleep" local strategy rather than the
-  "schedule-a-fresh-session" strategy this project used.
+  noting both exist. Low priority unless a future task genuinely needs
+  long-running multi-agent coordination.
+- `dontAsk` vs `auto` mode for unattended headless runs specifically —
+  see `analysis/permission-model.md`'s "Remaining open" — worth a direct
+  decision in `planning/v1-spec.md`.
+- Whether `claude -p "/goal <condition>"` combined with a `RemoteTrigger`
+  one-shot actually works end to end for a *real* (non-research) coding
+  task — tonight's empirical test validated the plumbing (clone/read/
+  write/commit/push) but not `/goal` itself in a fired routine. Candidate
+  for the Priority 3 prototype.
