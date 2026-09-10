@@ -60,30 +60,60 @@ itself yet.
   duplicate the research this session is about to do anyway. If it fails,
   `RemoteTrigger get_run_log` on this trigger id is the first thing to check.
 
-## Completed
+## Completed (as of 2026-09-11 ~01:35 CEST, current session)
 
 - Environment/permission/scheduling investigation (this setup phase).
 - Repo scaffold created and pushed.
-
-## In progress / not yet started
-
-- `research/autonomous-loop.md` — investigate `asiridalugoda/autonomous-loop`
-- `research/overnight-protocol.md` — investigate `robogears/overnight-protocol`,
-  esp. its permission/deny-rule model in depth
-- `research/claude-code-capabilities.md` — started (see file), needs the
-  official-docs pass (sessions/resume, headless mode, hooks, Agent SDK,
-  compaction, usage-limit behaviour)
+- `research/autonomous-loop.md` — done, from actual repo content (SKILL.md
+  in full). `references/*.md` sub-files not yet read (low priority, see
+  file's own Open section).
+- `research/overnight-protocol.md` — done, including the requested deep
+  permission/deny-rule dive, from actual repo content (SKILL.md, install.sh,
+  launch-guide.md in full; scripts/hooks grepped not fully read, low
+  priority per file's own Open section).
+- `research/claude-code-capabilities.md` — done, empirical findings +
+  an official-docs pass (scheduled-tasks, sessions/resume, headless mode,
+  compaction, permission modes). Two promising leads flagged unexplored:
+  **`/goal`** (possibly directly relevant to AFK, high priority) and
+  **Desktop scheduled tasks** (local + persistent, a third scheduling
+  option we didn't use tonight).
 - `analysis/comparison.md`, `analysis/permission-model.md`,
-  `analysis/economics.md`, `analysis/local-vs-remote.md` — not started,
-  depend on the research files above
-- `planning/draft-claude-afk-plan.md`, `planning/open-questions.md` — not
-  started, depend on everything above
+  `analysis/economics.md` — all done, grounded in the research files above.
+- `analysis/local-vs-remote.md` — done, including the Desktop-scheduled-
+  tasks update.
+- `planning/draft-claude-afk-plan.md` — done: draft V1 recommendation,
+  reuse/adapt/leave-alone breakdown, unsolved problems.
+- `planning/open-questions.md` — current; `/goal` and Desktop scheduled
+  tasks are the two flagged high-priority items for next.
+
+## Remaining / next session's best next action
+
+All 6 requested deliverables now have real content (research x3, analysis
+x4, plan). What's left is depth, not gaps:
+
+1. **Read `/docs/en/goal`** — flagged high priority in
+   `planning/open-questions.md`. If it's a native bounded-work-loop
+   feature, it may materially change the "smallest sensible V1"
+   recommendation in `planning/draft-claude-afk-plan.md` — update that file
+   if so.
+2. Read `/docs/en/desktop-scheduled-tasks` — the local+persistent option;
+   update `analysis/local-vs-remote.md` if it changes the recommendation.
+3. Lower priority (per each research file's own "Open" section): the
+   `autonomous-loop` reference sub-files, `overnight-protocol`'s remaining
+   scripts, `/docs/en/permission-modes` and `/docs/en/hooks` in full.
+4. Check `RemoteTrigger get_run_log` on `trig_01WDqrGYk4JgLwkNL86HR72u`
+   once past `2026-09-11T03:50:00Z` — first real validation that the
+   scheduled continuation actually worked end to end (see "Scheduled
+   continuation" above).
+5. If time allows before the 13:00 UTC cutoff: tighten/proofread the
+   existing files rather than expanding scope further — the core research
+   question is answered; polish beats new breadth at this point.
 
 ## Best next action if you're a fresh session reading this
 
-1. `git log --oneline -10` and `git status` in this repo to confirm what's
-   actually landed vs. this file's claims.
+1. `git log --oneline -20` and `git status` in this repo to confirm what's
+   actually landed vs. this file's claims (this file may be stale if a
+   session after this one made more progress without updating it).
 2. Check current UTC time against the cutoff above before doing anything else.
-3. Pick up the next unchecked item in "In progress / not yet started", in
-   order — they're roughly dependency-ordered.
+3. Work through "Remaining / next session's best next action" in order.
 4. Commit and push after every meaningfully-complete file, not just at the end.

@@ -6,9 +6,14 @@ usage-limit pauses, crashes, and other interruptions — safely and
 economically. This is **research only**; no implementation of "Claude AFK"
 itself happens here yet.
 
-**Status:** in progress, overnight run started 2026-09-11. See
-[`STATE.md`](STATE.md) for exactly what's done vs. outstanding, and the
-current scheduled-continuation plan.
+**Status:** all 6 requested deliverables have a first complete pass —
+research on both third-party projects plus native Claude Code capabilities,
+the comparison/permission-model/economics/local-vs-remote analyses, and a
+draft plan. What remains is depth on two flagged leads (`/goal`, Desktop
+scheduled tasks — see `planning/open-questions.md`) that could still shift
+the draft plan's recommendation, plus validating that the scheduled
+overnight continuation actually worked end to end. See [`STATE.md`](STATE.md)
+for the precise breakdown and the next best action.
 
 ## Structure
 

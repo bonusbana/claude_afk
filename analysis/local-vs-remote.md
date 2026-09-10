@@ -38,10 +38,29 @@ open.
   continuation to keeping a specific interactive session or machine state
   alive, which is exactly the failure mode Claude AFK is meant to survive.
 
+## Update: there's a third option — Desktop scheduled tasks
+
+Official docs (`/docs/en/scheduled-tasks`, see
+`research/claude-code-capabilities.md`) reveal a middle ground we didn't
+use tonight: **Desktop scheduled tasks** run locally (so they keep local
+file access, unlike a cloud Routine's fresh clone) but — unlike `/loop` —
+don't require an open session and *are* persistent across restarts. Not
+yet investigated in depth. This directly matters for a future AFK task
+that needs this user's actual WSL/Windows environment (AutoHotkey,
+Rainmeter files outside any repo) rather than a fresh cloud checkout —
+worth comparing against a cloud Routine before deciding which to use for
+such a task.
+
 ## Open
 
-- Are there other current Claude-native remote/cloud options beyond
-  `RemoteTrigger` worth knowing about (e.g. anything Agent-SDK-hosted)?
+- Desktop scheduled tasks: read `/docs/en/desktop-scheduled-tasks` in
+  detail — how "persistent across restarts" is actually achieved (a
+  background service? re-launched on login?), and what happens if the
+  machine is fully shut down vs. merely restarted.
+- Managed Agents (`/docs/en/managed-agents/overview`) — a separate hosted
+  product for "long-running or asynchronous agents without managing your
+  own sandbox," mentioned by the Agent SDK docs but not compared against
+  Routines for this use case.
 - For a "substantial coding task" (as opposed to this research task), does
   the cloud sandbox have what's needed (build tools, language runtimes) or
   does that depend entirely on the chosen `environment_id`?
