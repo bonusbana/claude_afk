@@ -140,16 +140,70 @@ official hooks-reference check, not taken as fact here.
   subagents/workflows keep the process alive until done (capped at 10 min
   idle by default).
 
+## `/goal` — a native condition-driven work loop (major finding)
+
+`/goal <condition>` sets a completion condition; after every turn, a
+*separate* small/fast model (default Haiku-class, configurable) evaluates
+the transcript against it and returns **Not yet met** (keep working, reason
+fed back as guidance), **Met** (goal clears, achievement recorded), or
+**Impossible** (goal clears, failure + reason recorded — no manual
+cleanup needed). This is architecturally close to `autonomous-loop`'s
+maker≠checker split, natively, for free — the evaluator never calls tools
+and only judges what Claude itself already surfaced, so it's lighter-weight
+than a full independent reviewer subagent but is a genuinely separate
+judgment, not the same model grading its own work in the same turn.
+
+**Directly relevant to interruption-handling, precisely specified:**
+- **Transient failures (rate limits, overloaded servers) leave the goal
+  active** — `/goal` itself treats these as non-events, consistent with
+  `autonomous-loop`'s "an interruption is not a FAIL" principle, natively.
+- **Four failure classes clear the goal and require a manual `/goal
+  <condition>` restart**: an auth failure (only when Claude Code manages
+  its own credentials — a host-managed context like the desktop app or a
+  cloud session restores access on its own and leaves the goal active
+  instead), **an exhausted credit balance**, a context overflow
+  auto-compaction couldn't clear, or an unavailable model. This is the
+  most precise, official answer found to "how does usage-limit exhaustion
+  actually surface" — note the important distinction: a *rate limit* is
+  transient (goal stays active, presumably retried), but *exhausted
+  credit* is one of the four hard-clear cases (goal ends, needs explicit
+  restart).
+- **Background work (subagents/background shell) defers evaluation**, with
+  a check-in mechanism (first due at 30 min, backing off up to 4x) that
+  can itself start a turn during idle time in an interactive session (capped
+  at 3 idle check-ins between prompts) — a built-in answer to "don't let a
+  long background command silently stall the loop."
+- **Survives resume** on every resume route (condition carries over; turn
+  count/timer/token-baseline reset) — matches what the sessions doc already
+  told us, now with the mechanism explained: `/goal` is implemented as a
+  session-scoped prompt-based Stop hook under the hood.
+- **Works non-interactively**: `claude -p "/goal <condition>"` runs the
+  loop to completion in one invocation — directly composable with
+  Routines/Desktop scheduled tasks/headless mode, all investigated above.
+- Needs `auto` permission mode (or equivalent) to actually run unattended —
+  `/goal` itself doesn't change permission mode, so a Manual-mode session
+  still prompts per tool call same as ever.
+- Bounding a goal (turn/time caps) is just part of the condition text
+  itself (e.g. "...or stop after 20 turns") — the evaluator judges that
+  clause from the conversation like any other part of the condition, so
+  there's no separate hard-cap mechanism to configure.
+
+**Assessment for Claude AFK:** this substantially closes the gap between
+"native Claude Code" and "a custom loop harness" identified in
+`analysis/comparison.md`. For a single bounded objective with a verifiable
+end-state, `/goal` inside a `claude -p` invocation, fired by a Routine or
+Desktop scheduled task, plausibly **replaces** most of what a hand-written
+loop-prompt (like tonight's own `RemoteTrigger` prompt, or
+`autonomous-loop`'s bootstrap-and-iterate cycle) does by hand — at the cost
+of a lighter-weight evaluator (no tool use, judges only the transcript) and
+no persistent multi-goal spine (one goal per session; a multi-goal backlog
+still needs something like `autonomous-loop`'s `BOARD.md`/`GOALS.md` files,
+just with `/goal` handling the "keep going without re-prompting" part
+natively instead of custom loop instructions). See the updated
+recommendation in `planning/draft-claude-afk-plan.md`.
+
 ## Still open / not yet investigated
 
-- **`/goal`** (`/docs/en/goal`) — mentioned in passing by the sessions doc
-  ("keep the session working turn after turn toward a condition") and
-  confirmed to survive resume (turn count/timer/token-baseline reset on
-  resume). This could be a **directly relevant native feature for Claude
-  AFK** — a built-in bounded, condition-driven work loop — and hasn't been
-  read at all yet. **High priority for the next research pass** before
-  finalizing `planning/draft-claude-afk-plan.md`; it may change the "smallest
-  sensible V1" recommendation.
 - **Desktop scheduled tasks** (`/docs/en/desktop-scheduled-tasks`) — the
   local-persistent-with-file-access option flagged above; not read in
   detail. Relevant specifically for any future AFK task needing this

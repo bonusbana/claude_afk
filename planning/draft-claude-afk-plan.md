@@ -6,26 +6,43 @@ starting point for a conversation, not a spec.
 
 ## Headline conclusion
 
-**A custom system is probably not needed for a V1.** Native Claude Code
-already provides the hardest piece — a truly durable, session-independent
-continuation mechanism (`RemoteTrigger` cloud routines) — for free, and the
-lightest-weight third-party idea (`autonomous-loop`'s file-based spine) is
-a small enough convention to adopt directly rather than reimplement. The
-one genuinely hard unsolved problem (proactive usage-limit awareness mid-
-session) doesn't need solving for the "schedule a fresh session after
-reset" strategy this project already used tonight — it only matters for
-the alternative "keep one session alive and sleep through the reset"
-strategy, which `overnight-protocol` uses and which brings its heaviest
-machinery along with it.
+**A custom system is probably not needed for a V1 — more strongly than
+first thought.** Native Claude Code already provides the two hardest
+pieces, both for free: a truly durable, session-independent continuation
+mechanism (`RemoteTrigger` cloud routines / Desktop scheduled tasks), and
+— discovered after the first pass of this plan — **`/goal`**, a native
+condition-driven work loop with independent per-turn evaluation and
+explicit, precise error classification (transient failures like rate
+limits leave it running; credit exhaustion, context overflow, and a few
+other hard cases cleanly clear it for an explicit restart). Composed
+together (`claude -p "/goal <condition>"`, fired by a Routine or Desktop
+task), this covers most of what a hand-written loop-prompt or
+`autonomous-loop`'s bootstrap-and-iterate cycle does by hand, for a single
+bounded objective. See `research/claude-code-capabilities.md`'s `/goal`
+section for the detail. The one genuinely hard unsolved problem (proactive
+usage-limit awareness *mid-session*, before an error forces the issue)
+doesn't need solving for the "schedule a fresh session after reset"
+strategy this project already used tonight — it only matters for the
+alternative "keep one session alive and sleep through the reset" strategy,
+which `overnight-protocol` uses and which brings its heaviest machinery
+along with it.
 
 ## What should potentially be reused as-is
 
-- **`RemoteTrigger` cloud routines** for durable, session-independent
-  continuation. Confirmed tonight: survives local machine
-  sleep/reboot/shutdown/WSL state by construction (never touches the local
-  machine), one API call to set up, GitHub-native. This replaces the
-  entire daemon/hook/flag-file apparatus `overnight-protocol` builds to
+- **`RemoteTrigger` cloud routines** (or Desktop scheduled tasks, if local
+  file access is needed — see `analysis/local-vs-remote.md`) for durable,
+  session-independent continuation. Confirmed tonight: survives local
+  machine sleep/reboot/shutdown/WSL state by construction (never touches
+  the local machine), one API call to set up, GitHub-native. This replaces
+  the entire daemon/hook/flag-file apparatus `overnight-protocol` builds to
   solve the same "come back later" problem locally.
+- **`/goal`** for the actual "keep working without re-prompting" loop
+  within a single fired session, in place of hand-written loop
+  instructions — `claude -p "/goal <condition, with a turn/time bound>"`.
+  Its independent per-turn evaluator and precise transient-vs-hard-failure
+  classification (see `research/claude-code-capabilities.md`) are exactly
+  the two things a hand-rolled prompt would otherwise have to specify in
+  prose and hope is followed.
 - **A small git-committed state file** (this project's own `STATE.md`
   tonight, or `autonomous-loop`'s slightly more structured
   `GOALS.md`/`BOARD.md`/`handover.md` split for a larger task) as the
@@ -113,16 +130,24 @@ Given a "substantial coding task" (the real eventual use case):
    to need dependency-ordered goals) committed to the repo, read-first by
    every session.
 2. A standing `permissions.deny` for the force-push/clean rules.
-3. Work happens in a normal interactive session until it stalls (context,
-   usage limit, or a natural stopping point); before stopping, the state
-   file is updated and pushed.
-4. A `RemoteTrigger` one-shot (or short recurring, respecting the 1-hour
-   floor) scheduled to continue, with a **state-first, idempotent** prompt:
-   read state + actual repo state, verify, continue or no-op.
-5. One independent review/verification step before anything is marked
-   done — doesn't need the full maker/checker/red-team apparatus, just
-   *someone other than the implementer* checking the acceptance criterion.
-6. No daemon, no hooks, no coordinator, no unbounded self-generated-work
+3. Within a fired session, use **`/goal <verifiable condition>`** rather
+   than a hand-written loop-forever prompt — its own evaluator and error
+   classification cover most of "keep going without re-prompting" and
+   "don't treat a rate limit as a failure" for free.
+4. When `/goal` clears for a hard reason (credit exhausted, context
+   overflow, etc.) or the fired session otherwise ends, the state file is
+   updated and pushed before stopping — same discipline this project used
+   tonight, now needed less often since `/goal` absorbs the common
+   transient-failure case itself.
+5. A `RemoteTrigger` one-shot (or Desktop scheduled task; short recurring
+   respecting the 1-hour Routine floor) scheduled to continue, with a
+   **state-first, idempotent** prompt: read state + actual repo state,
+   verify, re-issue `/goal` with the next condition or no-op if already done.
+6. One independent review/verification step before anything is marked
+   done — `/goal`'s evaluator gives a lightweight version of this for
+   free; add a real independent reviewer subagent only for higher-stakes
+   changes, not by default.
+7. No daemon, no hooks, no coordinator, no unbounded self-generated-work
    mode — add any of those later, individually, only if a specific,
    observed problem justifies that specific piece of overhead.
 

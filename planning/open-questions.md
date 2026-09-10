@@ -2,13 +2,6 @@
 
 ## High priority — check before finalizing the plan
 
-- **`/goal`** (`/docs/en/goal`) — an official Claude Code feature,
-  described only in passing so far as keeping "the session working turn
-  after turn toward a condition," and confirmed to survive session resume
-  (turn count/timer/token-spend baseline reset). This has not been read at
-  all yet and could be a **directly relevant native building block for
-  Claude AFK** — possibly reducing the "smallest sensible V1" in
-  `planning/draft-claude-afk-plan.md` even further. Read it next.
 - **Desktop scheduled tasks** (`/docs/en/desktop-scheduled-tasks`) — runs
   locally (keeps file access) but persists across restarts without an open
   session, unlike `/loop`. Relevant for any future AFK task needing this
@@ -17,6 +10,12 @@
 
 ## Resolved tonight (kept for the record)
 
+- ~~What is `/goal`?~~ Read in full: a native condition-driven work loop
+  with independent per-turn evaluation and precise error classification
+  (transient failures like rate limits leave it active; credit exhaustion/
+  context overflow/auth/model-unavailable clear it for an explicit
+  restart). Folded into `research/claude-code-capabilities.md` and
+  `planning/draft-claude-afk-plan.md`'s V1 recommendation.
 - ~~Does `RemoteTrigger` support GitLab?~~ Never conclusively tested against
   a GitLab URL specifically, but resolved as moot — the repo moved to
   GitHub, and the docs confirm Routines are one of three official

@@ -89,16 +89,15 @@ itself yet.
 ## Remaining / next session's best next action
 
 All 6 requested deliverables now have real content (research x3, analysis
-x4, plan). What's left is depth, not gaps:
+x4, plan), and the `/goal` feature (a major native finding — a
+condition-driven work loop with independent evaluation and precise
+transient-vs-hard-failure classification) has been folded into both
+`research/claude-code-capabilities.md` and the draft plan's V1
+recommendation. What's left is depth, not gaps:
 
-1. **Read `/docs/en/goal`** — flagged high priority in
-   `planning/open-questions.md`. If it's a native bounded-work-loop
-   feature, it may materially change the "smallest sensible V1"
-   recommendation in `planning/draft-claude-afk-plan.md` — update that file
-   if so.
-2. Read `/docs/en/desktop-scheduled-tasks` — the local+persistent option;
+1. Read `/docs/en/desktop-scheduled-tasks` — the local+persistent option;
    update `analysis/local-vs-remote.md` if it changes the recommendation.
-3. Lower priority (per each research file's own "Open" section): the
+2. Lower priority (per each research file's own "Open" section): the
    `autonomous-loop` reference sub-files, `overnight-protocol`'s remaining
    scripts, `/docs/en/permission-modes` and `/docs/en/hooks` in full.
 4. Check `RemoteTrigger get_run_log` on `trig_01WDqrGYk4JgLwkNL86HR72u`
