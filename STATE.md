@@ -32,15 +32,33 @@ itself yet.
 
 ## Scheduled continuation
 
-- Routine name/id: **[fill in after creation]**
-- Fires: ~shortly after next usage reset (reset expected ~05:38 CEST /
-  03:38 UTC on 2026-09-11; routine set for **03:50 UTC 2026-09-11**).
-- Hard cutoff: must stop and leave clean state by **13:00 UTC 2026-09-11**
-  (1 hour of margin before the user's 14:00 UTC / 16:00 CEST deadline).
-- No further continuation is scheduled after that — by design (user is
-  reclaiming afternoon usage).
-- The routine's prompt embeds this file's location and instructs it to read
-  this STATE.md first, verify actual repo/git state, then continue.
+- Routine: `claude-afk-research-continuation`, id `trig_01WDqrGYk4JgLwkNL86HR72u`
+  (created via `RemoteTrigger`, confirmed HTTP 200, `next_run_at`
+  `2026-09-11T03:50:00Z`). View/manage at https://claude.ai/code/routines
+  (routines can't be deleted via API, UI only).
+- Fires once (`run_once_at`, not recurring) ~shortly after the next usage
+  reset (reset expected ~05:38 CEST / 03:38 UTC on 2026-09-11; routine set
+  for **03:50 UTC 2026-09-11**).
+- Hard cutoff baked into its prompt: stop and leave clean state by
+  **13:00 UTC 2026-09-11** (1 hour margin before the user's real 14:00 UTC /
+  16:00 CEST deadline). The prompt explicitly forbids it from scheduling any
+  further continuation itself.
+- Source repo for the cloud checkout: `https://github.com/bonusbana/claude_afk`
+  (required the user to authorize the Claude GitHub App at the account level
+  — a *separate* auth step from the local SSH key; the first `create` call
+  failed with 401 "Connect your GitHub account" until that was done, then
+  succeeded. Genuinely useful finding for `research/claude-code-capabilities.md`:
+  the App-connection step wasn't reachable via the exact `claude.ai/code/onboarding?magic=...`
+  link given by the tooling — that link 404'd for the user — so it was done via
+  one of the fallback paths instead: `/web-setup` in a claude.ai chat, the
+  Connectors settings page, or GitHub's own installed-apps page.).
+- **Not yet end-to-end verified**: routine creation succeeded (proves the repo
+  is readable/authorized at creation-time preflight), but whether the cloud
+  session can actually clone-work-commit-push when it fires is unconfirmed
+  until 03:50 UTC actually happens. Deliberately not spending current-session
+  usage on a throwaway `RemoteTrigger` "run now" test, since it would just
+  duplicate the research this session is about to do anyway. If it fails,
+  `RemoteTrigger get_run_log` on this trigger id is the first thing to check.
 
 ## Completed
 
