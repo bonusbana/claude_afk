@@ -14,6 +14,10 @@ itself yet.
   scheduler — see `research/claude-code-capabilities.md`) is GitHub-native
   (Claude GitHub App) with no GitLab equivalent found anywhere in the
   tooling. This removed the need for a GitLab access token entirely.
+  Repo: **https://github.com/bonusbana/claude_afk** (user created it
+  manually as `claude_afk`, not `claude-tools` as originally sketched — the
+  planned nested `claude-afk-research/` subfolder was flattened to repo
+  root accordingly; all paths below are repo-root-relative).
 - Claude GitHub App authorized on this repo (user did this manually,
   claude.ai side — cannot be verified from inside a local session; the
   scheduled continuation's own run log is the real test).
