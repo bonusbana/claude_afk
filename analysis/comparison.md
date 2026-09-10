@@ -1,17 +1,32 @@
 # Comparison
 
-Status: not started — depends on both `research/autonomous-loop.md` and
-`research/overnight-protocol.md` being filled in first.
+Native Claude Code (this project's own setup tonight) vs. `autonomous-loop`
+vs. `overnight-protocol`, against the Claude AFK target workflow: give
+Claude an objective → autonomous work → persistent state → verify progress
+→ stop when necessary → recover later → continue from durable state →
+finish or safely stop when blocked → leave a useful report.
 
-Side-by-side against the Claude AFK target workflow, on:
+| Criterion | Native Claude Code | `autonomous-loop` | `overnight-protocol` |
+|---|---|---|---|
+| **Autonomy** | `RemoteTrigger` cloud routines run a fully unattended cloud session on a schedule/one-shot; local sessions still need a human or a durable trigger to restart. No built-in "keep generating your own work forever" concept. | Runs unattended within a session; self-unblocks on failure; escalates after 3 strikes. No unbounded self-generated-work mode by default (that's a deliberate `overnight-protocol` specialty). | Explicitly designed to *never stop on its own* — generates its own backlog forever once the official one is exhausted. Most autonomous of the three, and the riskiest without strong guardrails. |
+| **Persistent state** | Whatever the user builds — no opinion of its own beyond git + files. `RemoteTrigger` sessions get state only from a git source + the prompt. | A defined, minimal file **spine** (`GOALS.md`/`BOARD.md`/`handover.md`/`LOOP.md`), all git-committed. Deliberately the entire resume context. | Plan + report files in-repo, plus an *out-of-repo* JSON flag (`~/.claude/overnight-loop-active`) that gates hooks — two state surfaces instead of one. |
+| **Recovery** | `RemoteTrigger` survives any local machine state (sleep/reboot/shutdown/WSL down) because it never touches the local machine; a local session does not. No native compaction-recovery hook mechanism used by us tonight. | Resume = read spine in fixed order, continue. Works the same whether triggered by a fresh interactive session, a `/schedule` cloud routine, or a human relaunch — mechanism-agnostic. | Automatic via a `SessionStart` hook (matcher `startup\|resume\|compact`) *only if a new/resumed session gets launched in that exact project* — genuinely automatic recovery still depends on something restarting the terminal/session; nothing revives a fully dead machine on its own. |
+| **Usage-limit handling** | No native usage-metering surfaced to the agent as a first-class signal in this investigation (open question — see `claude-code-capabilities.md`). `RemoteTrigger`'s own scheduling sidesteps needing this by starting a *fresh* budgeted session at a chosen time instead of waiting one out. | No usage-monitoring of its own; treats a limit hit as "just an interruption," resumed via a scheduler (explicitly recommends a *durable* one, e.g. `/schedule`, if a hard limit might kill the session). | The most sophisticated of the three: a background daemon + a trust-ranked source ladder (real / real-api / real-app / cost-estimate) that self-heals stale readings by taking one more cheap turn. Genuinely solves a hard problem, at the cost of real complexity and (as shipped) macOS-specific plumbing. |
+| **Verification** | None built-in — whatever the user's own process does. | Structural: maker ≠ checker on every goal, a separate verifier confirms the AC against evidence, red-team for security-critical changes. Reviewer output itself treated as untrusted data. | Tests/build/typecheck vs. a recorded baseline, plus delegating to a separate `/audit` skill each ladder cycle. No structural maker/checker split — the same session that builds also decides it's done. |
+| **Permissions/safety** | Two independent layers found: `permissions.allow`/`deny`/`defaultMode` (configurable), and an **unconfigurable auto-mode classifier** that blocks certain categories (credential generation, self-permission-editing) regardless of mode. | Guardrails are almost entirely prose (security-critical-invariant panel, "confirm the irreversible," scope discipline) — no specific `permissions.deny` recipe documented in the files read. Self-modification of the runbook is explicitly fenced (additive-only, can't touch guardrails). | Concrete, minimal, and *demonstrated*: 3 `permissions.deny` rules (force-push/git clean) is the entire Claude-Code-enforced net under `--dangerously-skip-permissions`; explicit `ask` rules are the only other thing proven to survive that flag. Everything else is prose, same as `autonomous-loop`. |
+| **Credit/token efficiency** | Depends entirely on what's built; a `RemoteTrigger` one-shot only spends what that run's prompt asks for — no standing background cost. | Efficiency is structural: goal-scaled checker panel (light review for low-risk work, full panel only for security-critical), explicit anti-repeat rule for optimization experiments, rewind-before-escalate to avoid compounding a bad path. | Real background cost while armed (usage daemon polling every ~60-180s continuously) plus the built-in risk that an unbounded self-generated ladder spends significant usage with only prose (anti-churn rules), not a structural check, keeping it from becoming busywork. |
+| **Complexity** | Lowest — a `RemoteTrigger` routine is one API call; no scripts, daemons, or hooks to install/maintain. | Medium — a handful of markdown spine files and role conventions; no scripts/daemons/hooks at all. Complexity is almost entirely conceptual/procedural, not infrastructural. | Highest — an installer, 7+ shell scripts, 2 hooks, a background daemon, global settings.json mutation (statusLine + env + hooks), macOS Keychain integration. |
+| **Windows/WSL2 compatibility** | Full — `RemoteTrigger` is cloud-side and OS-agnostic; anything built locally just needs to work in WSL2 like everything else in this environment. | Full in principle — pure markdown + git conventions, no OS-specific tooling anywhere in what was read. Its Windows-specific piece (Relay's `schtasks` backstop) is opt-in and only for multi-machine mode. | **Poor as shipped** — `caffeinate`, `osascript`, Keychain/`security`, Full Disk Access are all macOS-only; the *design* (hooks + flag + daemon + sleep) is portable, but every concrete script would need a WSL2/Windows rewrite before it runs at all here. |
+| **Suitability for a small personal project (this user)** | Good building block, not a complete solution by itself — needs a state/resume convention layered on top (which is exactly what `autonomous-loop`'s spine or a lighter homemade version would provide). | **Good fit.** Lightweight, no infrastructure to install or maintain, scales its own overhead down for small/low-risk work, and its core idea (spine files + durable-scheduler awareness) directly matches this user's "understandable, maintainable solutions over elaborate infrastructure" preference. | **Poor fit as shipped** for this user specifically — heavy infrastructure, macOS-native, and an unbounded self-generated-work mode is arguably more autonomy than a hobbyist project needs or wants to pay for. Its *ideas* (deny-rule recipe, source-ranked usage detection, dead-run failsafe) are worth borrowing piecemeal even if the package as a whole isn't adopted. |
 
-- autonomy
-- persistent state
-- recovery
-- usage-limit handling
-- verification
-- permissions/safety
-- credit/token efficiency
-- complexity
-- Windows/WSL compatibility
-- suitability for relatively small personal projects
+## Headline takeaway
+
+The two third-party projects sit at genuinely different points on the
+autonomy/complexity curve, not just different implementations of the same
+idea: `autonomous-loop` is a **methodology** (files + role discipline, no
+software to install) that is already close to what native Claude Code
+provides once you add `RemoteTrigger` for durable scheduling; `overnight-
+protocol` is a **local software system** solving a harder, narrower problem
+(exact real-time usage awareness without ever ending the session) at real
+infrastructural and platform cost. See `analysis/economics.md` and
+`planning/draft-claude-afk-plan.md` for what that implies for a V1.
