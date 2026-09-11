@@ -1,118 +1,107 @@
 # Session State (read this first on resume)
 
-**Objective:** research existing "run Claude unattended for a long time"
-projects and Claude Code's own native capabilities, compare them, and draft
-a plan for a possible future "Claude AFK" project. Do NOT implement AFK
-itself yet.
+**Objective (stage 2, current):** turn stage-1 research into validated
+conclusions, a small tested prototype, and an implementation-ready V1 spec
+for a possible future "Claude AFK" project. Do NOT implement AFK itself.
 
-## Setup (completed 2026-09-11 ~00:40-01:10 CEST)
+**Stage 1 objective (completed 2026-09-11, see git history before commit
+`9c57b75`):** research existing "run Claude unattended" projects and
+Claude Code's native capabilities, compare them, draft a plan. Done — see
+`research/`, `analysis/`, and the (now superseded by `planning/v1-spec.md`)
+`planning/draft-claude-afk-plan.md`.
 
-- SSH key generated (`~/.ssh/id_ed25519`), added to GitHub, verified
-  read+write on `bonusbana/windows-automation` and this repo.
-- Repo pivoted from **GitLab to GitHub** mid-setup, on the user's explicit
-  instruction, once we discovered `RemoteTrigger` (Claude's cloud routine
-  scheduler — see `research/claude-code-capabilities.md`) is GitHub-native
-  (Claude GitHub App) with no GitLab equivalent found anywhere in the
-  tooling. This removed the need for a GitLab access token entirely.
-  Repo: **https://github.com/bonusbana/claude_afk** (user created it
-  manually as `claude_afk`, not `claude-tools` as originally sketched — the
-  planned nested `claude-afk-research/` subfolder was flattened to repo
-  root accordingly; all paths below are repo-root-relative).
-- Claude GitHub App authorized on this repo (user did this manually,
-  claude.ai side — cannot be verified from inside a local session; the
-  scheduled continuation's own run log is the real test).
-- Local `.claude/settings.json` given narrow allow-rules for git subcommands,
-  `python3`, `mkdir -p`, `ssh -T` checks — approved by user after the
-  auto-mode classifier blocked Claude from self-editing its own permissions
-  (a real finding, logged in capabilities doc).
-- One-shot `RemoteTrigger` routine scheduled for the post-reset continuation
-  (see "Scheduled continuation" below). This IS the documented
-  session-independent mechanism — `CronCreate` was investigated and rejected
-  for this purpose (session-only, in-memory, dies when this session ends).
+## Stage 2: completed (2026-09-10 ~23:48 UTC – 2026-09-11 ~00:05 UTC)
+
+- **Priority 1 (continuation/scheduling):** the existing `RemoteTrigger`
+  routine (`trig_01WDqrGYk4JgLwkNL86HR72u`) was inspected, then **fired
+  live** with a scoped verification-only prompt via `RemoteTrigger
+  action=run` — see "Scheduled continuation" below for the full empirical
+  result. Its stored prompt has now been repurposed for stage 2's own
+  fallback continuation (see below); same hard cutoff retained; no
+  recurring/orphaned schedule left behind (still a single one-shot).
+- **Priority 2 (highest-value open questions), all closed:**
+  - Desktop scheduled tasks: read `/docs/en/desktop-scheduled-tasks` in
+    full — see `analysis/local-vs-remote.md`. Answered: persistence,
+    machine/awake requirements, catch-up behavior, permission behavior, and
+    the (still-open, low-priority) Windows/WSL Bash-shell-semantics
+    question.
+  - `RemoteTrigger` empirical validation: **PASS 6/6** (clone, repo-access,
+    state-read, file-write, commit, push) — real live test, not assumed.
+    See `validation/remote-trigger-test.md`, commit `9c57b75`.
+  - Permission/auto-mode edge cases: `/docs/en/permission-modes` read in
+    full — see `analysis/permission-model.md`. Corrected an earlier
+    stage-1 mischaracterization (the settings.json block was a
+    protected-path classifier judgment, not a special
+    self-permission-editing rule) and established the single most
+    important finding for AFK: **headless (`-p`) runs cannot stall on a
+    permission block at all** (no prompt to wait on) — decisive for the
+    architecture recommendation.
+- **Priority 3 (small POC), done:** `prototype/` — a deterministic,
+  offline, zero-Claude-usage simulator of AFK mechanics (persistent state,
+  stop-and-save, interruption classification, retry/backoff, fresh-session
+  continuation, safety limits, cost-awareness). **8/8 scenarios pass.**
+  Caught and fixed two real design bugs before any real implementation
+  (session-count bookkeeping timing; crash-detection logic) — see
+  `prototype/README.md`'s "Bugs this prototype already caught" section,
+  and the corresponding lesson folded into `planning/v1-spec.md`'s
+  Persistent state model.
+- **Implementation-ready spec:** `planning/v1-spec.md` — supersedes
+  `planning/draft-claude-afk-plan.md` as the primary planning document
+  (that file is kept for history/context, not deleted). Final
+  recommendation: **don't build custom AFK software** — compose
+  `claude -p "/goal <condition>"` + `RemoteTrigger` Routines + `auto`
+  permission mode + a single state file. Full reuse/adapt/leave-alone
+  breakdown and smallest-useful-V1 description are in that file.
 
 ## Scheduled continuation
 
-- Routine: `claude-afk-research-continuation`, id `trig_01WDqrGYk4JgLwkNL86HR72u`
-  (created via `RemoteTrigger`, confirmed HTTP 200, `next_run_at`
-  `2026-09-11T03:50:00Z`). View/manage at https://claude.ai/code/routines
-  (routines can't be deleted via API, UI only).
-- Fires once (`run_once_at`, not recurring) ~shortly after the next usage
-  reset (reset expected ~05:38 CEST / 03:38 UTC on 2026-09-11; routine set
-  for **03:50 UTC 2026-09-11**).
-- Hard cutoff baked into its prompt: stop and leave clean state by
-  **13:00 UTC 2026-09-11** (1 hour margin before the user's real 14:00 UTC /
-  16:00 CEST deadline). The prompt explicitly forbids it from scheduling any
-  further continuation itself.
-- Source repo for the cloud checkout: `https://github.com/bonusbana/claude_afk`
-  (required the user to authorize the Claude GitHub App at the account level
-  — a *separate* auth step from the local SSH key; the first `create` call
-  failed with 401 "Connect your GitHub account" until that was done, then
-  succeeded. Genuinely useful finding for `research/claude-code-capabilities.md`:
-  the App-connection step wasn't reachable via the exact `claude.ai/code/onboarding?magic=...`
-  link given by the tooling — that link 404'd for the user — so it was done via
-  one of the fallback paths instead: `/web-setup` in a claude.ai chat, the
-  Connectors settings page, or GitHub's own installed-apps page.).
-- **Not yet end-to-end verified**: routine creation succeeded (proves the repo
-  is readable/authorized at creation-time preflight), but whether the cloud
-  session can actually clone-work-commit-push when it fires is unconfirmed
-  until 03:50 UTC actually happens. Deliberately not spending current-session
-  usage on a throwaway `RemoteTrigger` "run now" test, since it would just
-  duplicate the research this session is about to do anyway. If it fails,
-  `RemoteTrigger get_run_log` on this trigger id is the first thing to check.
+- Routine: `claude-afk-research-continuation`, id `trig_01WDqrGYk4JgLwkNL86HR72u`.
+  View/manage at https://claude.ai/code/routines (routines can't be
+  deleted via API, UI only — still just one routine, no orphans).
+- **Empirically validated tonight** (2026-09-10T23:48–23:49 UTC): fired
+  on-demand via `RemoteTrigger action=run` with a scoped verification
+  prompt. Result: clone OK, repo-access OK, STATE.md read OK, file write
+  OK, commit OK, push OK — 25s, 10 turns, zero permission stalls. Full
+  transcript summary in `validation/remote-trigger-test.md` (commit
+  `9c57b75`) and this file's git history (see `RemoteTrigger get_run_log`
+  on session `cse_01WDLmBQ4EUeuCpG8cSs58oe` for the raw log if needed).
+- **Stored prompt has been repurposed for stage 2 fallback continuation**
+  (see below) — it now targets whatever remains in this file's "Remaining"
+  section, not the original stage-1 research task.
+- Still fires once at **2026-09-11T03:50:00Z** (`run_once_at`, not
+  recurring) if this session stops before the user returns.
+- Hard cutoff unchanged and still baked into the stored prompt: stop and
+  leave clean state by **2026-09-11T13:00:00Z** (1 hour margin before the
+  user's real 14:00 UTC / 15:00 Stockholm return). No further continuation
+  scheduled after that, and none should be — this is intentional, not an
+  oversight.
 
-## Completed (as of 2026-09-11 ~01:35 CEST, current session)
+## Remaining (small, low priority — everything requested has a first complete pass)
 
-- Environment/permission/scheduling investigation (this setup phase).
-- Repo scaffold created and pushed.
-- `research/autonomous-loop.md` — done, from actual repo content (SKILL.md
-  in full). `references/*.md` sub-files not yet read (low priority, see
-  file's own Open section).
-- `research/overnight-protocol.md` — done, including the requested deep
-  permission/deny-rule dive, from actual repo content (SKILL.md, install.sh,
-  launch-guide.md in full; scripts/hooks grepped not fully read, low
-  priority per file's own Open section).
-- `research/claude-code-capabilities.md` — done, empirical findings +
-  an official-docs pass (scheduled-tasks, sessions/resume, headless mode,
-  compaction, permission modes). Two promising leads flagged unexplored:
-  **`/goal`** (possibly directly relevant to AFK, high priority) and
-  **Desktop scheduled tasks** (local + persistent, a third scheduling
-  option we didn't use tonight).
-- `analysis/comparison.md`, `analysis/permission-model.md`,
-  `analysis/economics.md` — all done, grounded in the research files above.
-- `analysis/local-vs-remote.md` — done, including the Desktop-scheduled-
-  tasks update.
-- `planning/draft-claude-afk-plan.md` — done: draft V1 recommendation,
-  reuse/adapt/leave-alone breakdown, unsolved problems.
-- `planning/open-questions.md` — current; `/goal` and Desktop scheduled
-  tasks are the two flagged high-priority items for next.
-
-## Remaining / next session's best next action
-
-All 6 requested deliverables now have real content (research x3, analysis
-x4, plan), and the `/goal` feature (a major native finding — a
-condition-driven work loop with independent evaluation and precise
-transient-vs-hard-failure classification) has been folded into both
-`research/claude-code-capabilities.md` and the draft plan's V1
-recommendation. What's left is depth, not gaps:
-
-1. Read `/docs/en/desktop-scheduled-tasks` — the local+persistent option;
-   update `analysis/local-vs-remote.md` if it changes the recommendation.
-2. Lower priority (per each research file's own "Open" section): the
-   `autonomous-loop` reference sub-files, `overnight-protocol`'s remaining
-   scripts, `/docs/en/permission-modes` and `/docs/en/hooks` in full.
-4. Check `RemoteTrigger get_run_log` on `trig_01WDqrGYk4JgLwkNL86HR72u`
-   once past `2026-09-11T03:50:00Z` — first real validation that the
-   scheduled continuation actually worked end to end (see "Scheduled
-   continuation" above).
-5. If time allows before the 13:00 UTC cutoff: tighten/proofread the
-   existing files rather than expanding scope further — the core research
-   question is answered; polish beats new breadth at this point.
+1. Desktop scheduled tasks: whether its Bash tool on this Windows/WSL2
+   machine shells into WSL or native Windows — untested, flagged in
+   `analysis/local-vs-remote.md`. Only matters if a future task actually
+   uses Desktop scheduled tasks.
+2. Whether a fired `RemoteTrigger` session can safely self-reschedule its
+   own next continuation — deliberately left unverified and out of V1
+   scope per `planning/v1-spec.md`'s Scheduler section; not a gap, a
+   stated boundary.
+3. `dontAsk` vs `auto` mode for unattended runs — open question in
+   `analysis/permission-model.md`, low priority, decidable later by trying
+   both on a real task.
+4. General proofreading — only if genuinely idle with time before the
+   cutoff; do not manufacture busywork here (see this project's own
+   economics analysis on the risk of unverified self-generated work).
 
 ## Best next action if you're a fresh session reading this
 
-1. `git log --oneline -20` and `git status` in this repo to confirm what's
-   actually landed vs. this file's claims (this file may be stale if a
-   session after this one made more progress without updating it).
-2. Check current UTC time against the cutoff above before doing anything else.
-3. Work through "Remaining / next session's best next action" in order.
-4. Commit and push after every meaningfully-complete file, not just at the end.
+1. `git log --oneline -20` and `git status` to confirm what's actually
+   landed vs. this file's claims.
+2. Check current UTC time against `2026-09-11T13:00:00Z` before doing
+   anything else. If past it, do not start new work — verify the repo is
+   clean, confirm `README.md` is accurate, stop.
+3. If genuinely idle with time remaining, work the short "Remaining" list
+   above, in order. This is optional depth, not required scope — everything
+   the user asked for already has a complete, evidenced first pass.
+4. Commit and push after every meaningfully-complete change, not just at
+   the end.

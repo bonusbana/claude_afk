@@ -3,17 +3,35 @@
 Investigating what it would take to let Claude Code work unattended on a
 substantial coding task for a long period — through context exhaustion,
 usage-limit pauses, crashes, and other interruptions — safely and
-economically. This is **research only**; no implementation of "Claude AFK"
-itself happens here yet.
+economically. This is **research, validation, and a small prototype**; no
+implementation of "Claude AFK" itself happens here yet.
 
-**Status:** all 6 requested deliverables have a first complete pass —
-research on both third-party projects plus native Claude Code capabilities,
-the comparison/permission-model/economics/local-vs-remote analyses, and a
-draft plan. What remains is depth on two flagged leads (`/goal`, Desktop
-scheduled tasks — see `planning/open-questions.md`) that could still shift
-the draft plan's recommendation, plus validating that the scheduled
-overnight continuation actually worked end to end. See [`STATE.md`](STATE.md)
-for the precise breakdown and the next best action.
+**Status:** complete through stage 2. Stage 1 (research) and stage 2
+(validation + prototype + implementation-ready spec) are both done, with
+an evidenced first pass on everything requested:
+
+- All research (`autonomous-loop`, `overnight-protocol`, native Claude Code
+  capabilities) and analysis (comparison, permission model, economics,
+  local vs. remote) — see `research/` and `analysis/`.
+- The scheduled `RemoteTrigger` continuation was **empirically fired and
+  validated live** (clone/read/write/commit/push all PASS) rather than
+  assumed — see `validation/remote-trigger-test.md`.
+- A small deterministic **prototype** (`prototype/`) tests the actual
+  mechanics — persistent state, stop-and-save, interruption classification,
+  retry/backoff, crash recovery, safety limits, cost-awareness — entirely
+  offline, at zero real Claude usage. 8/8 scenarios pass, and it caught two
+  real design bugs before any real implementation.
+- **`planning/v1-spec.md`** is the implementation-ready spec and the
+  primary planning document now (supersedes the earlier
+  `planning/draft-claude-afk-plan.md`, kept for history).
+
+**Bottom line recommendation** (full reasoning in `planning/v1-spec.md`):
+don't build custom Claude AFK software. Compose `claude -p "/goal
+<condition>"` + `RemoteTrigger` Routines + `auto` permission mode + a
+single git-committed state file — all native, all validated tonight.
+
+A short list of low-priority remaining items (not blocking, not required)
+is in `STATE.md`'s "Remaining" section.
 
 ## Structure
 
@@ -22,12 +40,18 @@ for the precise breakdown and the next best action.
   - `overnight-protocol.md` — `robogears/overnight-protocol` (incl. its
     permission/deny-rule model)
   - `claude-code-capabilities.md` — native Claude Code mechanisms relevant
-    to unattended operation
+    to unattended operation, including `/goal` and scheduling options
 - `analysis/` — comparisons and cross-cutting analysis
   - `comparison.md`, `permission-model.md`, `economics.md`,
     `local-vs-remote.md`
-- `planning/` — where this might go
-  - `draft-claude-afk-plan.md`, `open-questions.md`
+- `prototype/` — small offline mechanics simulator (not production code —
+  see `prototype/README.md`)
+- `validation/` — empirical test artifacts (e.g. the live `RemoteTrigger` test)
+- `planning/`
+  - `v1-spec.md` — **the implementation-ready spec** (start here for "what
+    should V1 be")
+  - `draft-claude-afk-plan.md` — stage-1 draft, superseded by `v1-spec.md`
+  - `open-questions.md` — remaining low-priority uncertainties
 
 ## Ideal eventual workflow (the target we're evaluating against)
 
