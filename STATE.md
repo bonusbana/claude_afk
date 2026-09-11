@@ -105,3 +105,20 @@ Claude Code's native capabilities, compare them, draft a plan. Done — see
    the user asked for already has a complete, evidenced first pass.
 4. Commit and push after every meaningfully-complete change, not just at
    the end.
+
+## Fallback fire log
+
+- **2026-09-11T03:50 UTC:** the scheduled fallback continuation fired as a
+  safety net. Verified repo state against this file's claims (all matched)
+  and re-ran the prototype's 8/8 test suite (still all passing). Found one
+  real issue unrelated to task content: the prior session's stage-2 commits
+  had been made on a **detached HEAD**, never merged onto `main` or pushed
+  — `main`/`origin/main` were still sitting at the pre-stage-2 commit
+  (`11c0b1a`). Fast-forwarded `main` to the detached tip (`11e5c0c`,
+  confirmed a strict ancestor relationship first) and pushed; `origin/main`
+  now correctly carries all stage-2 work. Confirmed the "Remaining" section
+  above only lists low-priority optional items and all deliverables
+  (`research/`, `analysis/`, `prototype/`, `validation/`,
+  `planning/v1-spec.md`) have real, substantial content. Per this file's
+  own instructions, did not invent further work. Repo left clean and
+  pushed.
